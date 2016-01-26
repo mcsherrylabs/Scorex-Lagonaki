@@ -22,7 +22,7 @@ import scala.util.Try
   *
   * Use apply method of StoredState object to create new instance
   */
-class StoredState(database: DB, dbFileName: Option[String]) extends LagonakiState with ScorexLogging {
+class StoredState(var database: DB, dbFileName: Option[String]) extends LagonakiState with ScorexLogging {
 
   private object AccSerializer extends Serializer[Account] {
     override def serialize(dataOutput: DataOutput, a: Account): Unit =
@@ -77,7 +77,10 @@ class StoredState(database: DB, dbFileName: Option[String]) extends LagonakiStat
   override def copyTo(fileNameOpt: Option[String]): State = StoredState.synchronized {
     (fileNameOpt, dbFileName) match {
       case (Some(newFileName), Some(oldFileName)) =>
+        val snapshot = database.snapshot()
+        database.close()
         Files.copy(new File(oldFileName).toPath, new File(oldFileName).toPath)
+        database = snapshot
         new StoredState(StoredState.makeDb(fileNameOpt), fileNameOpt)
       case _ =>
         val db: DB = StoredState.makeDb(None)
@@ -214,6 +217,7 @@ object StoredState {
         .cacheSize(2048)
         .checksumEnable()
         .fileMmapEnable()
+        .snapshotEnable()
         .make()
     case None => DBMaker.memoryDB().snapshotEnable().make()
   }
